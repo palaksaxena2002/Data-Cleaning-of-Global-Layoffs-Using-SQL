@@ -1,0 +1,151 @@
+
+-- table
+SELECT * FROM palaks.layoffs;
+
+
+CREATE TABLE palaks.layoff_staging
+LIKE palaks.layoffs;
+
+INSERT palaks.layoff_staging
+SELECT * FROM palaks.layoffs;
+
+-- original
+SELECT * FROM palaks.layoff_staging;
+
+
+
+-- first thing we want to do is create a staging table. This is the one we will work in and clean the data. We want a table with the raw data in case something happens
+CREATE TABLE palaks.layoffs_staging 
+LIKE palaks.layoffs;
+
+-- -- 1. Remove Duplicates
+# First let's check for duplicates
+WITH duplicate_cte AS(
+SELECT company, location,industry,stage,country,funds_raised,total_laid_off,`date`,
+		ROW_NUMBER() OVER (
+			PARTITION BY company,location,industry,stage,country, 
+funds_raised, total_laid_off,`date`) AS row_num
+	FROM 
+		palaks.layoff_staging
+        )
+        SELECT* FROM duplicate_cte
+        WHERE row_num>1;
+        
+-- checking duplicates for Oda
+SELECT * FROM palaks.layoff_staging
+WHERE company='Oda';
+
+-- checking duplicates for Oda
+SELECT * FROM palaks.layoff_staging
+WHERE company='Casper';
+
+-- delete the duplicates
+WITH duplicate_cte AS(
+SELECT company, location,industry,stage,country,funds_raised,total_laid_off,`date`,
+		ROW_NUMBER() OVER (
+			PARTITION BY company,location,industry,stage,country, 
+funds_raised, total_laid_off,`date`) AS row_num
+	FROM 
+		palaks.layoff_staging
+        )
+        DELETE FROM duplicate_cte
+        WHERE row_num>1;
+
+CREATE TABLE `layoff_staging4` (
+  `company` text,
+  `location` text,
+  `industry` text,
+  `total_laid_off` text,
+  `percentage_laid_off` text,
+  `date` text,
+  `stage` text,
+  `country` text,
+  `funds_raised` double DEFAULT NULL,
+  `row_num` INT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+SELECT * FROM layoff_staging4;
+
+
+INSERT INTO palaks.layoff_staging4
+SELECT *,
+		ROW_NUMBER() OVER (
+			PARTITION BY company,location,industry,total_laid_off,percentage_laid_off,`date`,stage,country,funds_raised) AS row_num
+	FROM 
+		palaks.layoff_staging;
+        
+SELECT * FROM palaks.layoff_staging4
+WHERE row_num>1;
+
+DELETE FROM palaks.layoff_staging4
+WHERE row_num>1;
+
+-- Removing space infront of comapny 
+SELECT company ,TRIM(company)FROM palaks.layoff_staging4;
+
+-- Update/replace the company to trimmed company
+UPDATE layoff_staging4
+SET company=TRIM(company);
+
+-- industry col
+SELECT DISTINCT(industry) FROM layoff_staging4;
+
+-- checking for balnk row in industry col
+SELECT DISTINCT(industry) FROM layoff_staging4
+ORDER BY 1;
+
+-- 'https://www.calcalistech.com/ctechnews/article/rysmrkfua'-- newspaper 
+UPDATE layoff_staging4
+SET industry='Newspaper'
+WHERE industry LIKE 'https://www.calcalistech.com/ctechnews/article/rysmrkfua';
+
+-- Checking country col
+SELECT DISTINCT country FROM layoff_staging4
+ORDER BY 1;
+
+-- Checking location col
+SELECT DISTINCT location FROM layoff_staging4
+ORDER BY 1;
+
+-- Checking stage col- empty row 
+SELECT DISTINCT stage FROM layoff_staging4
+ORDER BY 1;
+
+-- -- Checking date col
+SELECT `date`,
+       STR_TO_DATE(`date`, '%Y-%m-%d') AS formatted_date
+FROM layoff_staging4;
+
+UPDATE layoff_staging4
+SET `date`= STR_TO_DATE(`date`, '%Y-%m-%d');
+
+-- changing the data type of dtae col
+ALTER TABLE layoff_staging4
+MODIFY COLUMN `date`DATE;
+
+-- working with null values in total laid off
+SELECT DISTINCT total_laid_off FROM layoff_staging4
+ORDER BY 1; 
+
+-- multiple duplicates are present in 
+SELECT total_laid_off,percentage_laid_off FROM layoff_staging4
+ORDER BY 1;
+
+-- (not working)
+SELECT * FROM layoff_staging3
+WHERE percentage_laid_off IS NULL;
+
+SELECT * 
+FROM layoff_staging4
+WHERE percentage_laid_off = ''
+AND total_laid_off='';
+
+SELECT * FROM layoff_staging4;
+
+DELETE
+FROM layoff_staging4
+WHERE percentage_laid_off = ''
+AND total_laid_off='';
+
+ALTER TABLE layoff_staging4
+DROP COLUMN row_num;
